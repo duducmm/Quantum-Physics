@@ -1,0 +1,9 @@
+function [mps]=JumpsMps(mps,Jump,site)
+Tams=size(mps{site});
+mps{site}=contracttensors(Jump{site},4,4,mps{site},3,3);
+mps{site}=permute(mps{site},[1,2,5,4,3]);
+mps{site}=reshape(mps{site},Tams);
+[mps]=prepare(mps);
+b=reshape(mps{1},[numel(mps{1}),1]);
+K=-b'*b;
+mps{1}=mps{1}/sqrt(K);

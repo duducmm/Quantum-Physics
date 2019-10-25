@@ -1,0 +1,234 @@
+clear
+clc
+
+N=35;
+
+Jx=1;
+Jy=1;
+Jz=1;
+h=0;
+Wd=0;
+Gamma=1;
+mu=1;
+
+Dwarm=20;
+Dmax=50;
+precision=10^(-8);
+Epsilon=10^(-8);
+precisionMPO=10^(-12);
+EpsilonMPO=10^(-8);
+Sweepmax=10;
+SweepmaxMPO=100;
+dtwarm=0.1;
+dt=0.05;
+
+Ndtwarm=round(2*N/dtwarm);
+Ndt=round(4*N/dt);
+Fid=ones(1,Ndtwarm+Ndt);
+% magnetization in z-direction
+OsetZ=cell(N,N);
+OsetCurrent=cell(N-1,N);
+d=2;
+dl=d^2;
+sx=[0,1;1,0]; sy=[0,-1i;1i,0]; sz=[1,0;0,-1];
+s=[0 0 ;1 0];
+Id=eye(dl);
+id=eye(d);
+for j=1:N,
+    for jj=1:N,
+        OsetZ{j,jj}=Id;
+        OsetCurrent{j,jj}=Id;
+    end
+end
+OsetCurrent2=OsetCurrent;
+for j=1:N-1
+    OsetZ{j,j}=kron(id,sz);
+    OsetCurrent{j,j}=kron(id,sx);
+    OsetCurrent{j,j+1}=kron(id,sy);
+    OsetCurrent2{j,j}=kron(id,sy);
+    OsetCurrent2{j,j+1}=kron(id,sx);
+end
+OsetZ{N,N}=kron(id,sz);
+
+% starting state
+mps=cell(1,N);
+for j=1:N
+    %state=[1; 0];
+    %state=state*state';
+    state=eye(d);
+    state=state/(trace(state));
+    state=reshape(state,dl,1);
+    mps{j}=reshape(state,[1,1,dl]);
+end
+%mps=createrandommps(N,Dmax,dl);
+mps=CanonizeA(mps);
+
+hz= Wd.*(rand(N,1)-0.5)*2+h;
+
+
+% time evolution operator
+
+dt1=dtwarm/(4-4^(1/3));
+dt2=dt1;
+dt3=dtwarm-2*dt1-2*dt2;
+[MPO1]=UMPOXXZbd(N,dl,hz,Jx,Jy,Jz,Gamma,mu,sx,sy,sz,s,Id,id,dt1,Dwarm,EpsilonMPO,precisionMPO,SweepmaxMPO);
+[MPO2]=UMPOXXZbd(N,dl,hz,Jx,Jy,Jz,Gamma,mu,sx,sy,sz,s,Id,id,dt2,Dwarm,EpsilonMPO,precisionMPO,SweepmaxMPO);
+[MPO3]=UMPOXXZbd(N,dl,hz,Jx,Jy,Jz,Gamma,mu,sx,sy,sz,s,Id,id,dt3,Dwarm,EpsilonMPO,precisionMPO,SweepmaxMPO);
+% time evolution
+TT=[linspace(1,Ndtwarm,Ndtwarm)*dtwarm Ndtwarm*dtwarm+linspace(1,Ndt,Ndt)*dt];
+Vdt=[ones(1,Ndtwarm)*dtwarm ones(1,Ndt)*dt];
+
+for step=1:Ndtwarm
+    clc
+    step
+    mpsi=mps;
+    
+    mps=TrotterSuzuki4th(MPO1,MPO2,MPO3,mps,N,Dwarm,Epsilon,precision,Sweepmax);
+    
+    Fid(step)=abs(braket(mpsi,mps))^2;
+    
+    [VZ,e,n]=expectationvalueTr(mps,OsetZ);
+    
+    Zsurf(:,step)=VZ.'/n;
+end
+
+
+dt1=dt/(4-4^(1/3));
+dt2=dt1;
+dt3=dt-2*dt1-2*dt2;
+[MPO1]=UMPOXXZbd(N,dl,hz,Jx,Jy,Jz,Gamma,mu,sx,sy,sz,s,Id,id,dt1,Dmax,EpsilonMPO,precisionMPO,SweepmaxMPO);
+[MPO2]=UMPOXXZbd(N,dl,hz,Jx,Jy,Jz,Gamma,mu,sx,sy,sz,s,Id,id,dt2,Dmax,EpsilonMPO,precisionMPO,SweepmaxMPO);
+[MPO3]=UMPOXXZbd(N,dl,hz,Jx,Jy,Jz,Gamma,mu,sx,sy,sz,s,Id,id,dt3,Dmax,EpsilonMPO,precisionMPO,SweepmaxMPO);
+
+
+for step=1:Ndt
+    
+    clc
+    step
+    mpsi=mps;
+    
+    mps=TrotterSuzuki4th(MPO1,MPO2,MPO3,mps,N,Dmax,Epsilon,precision,Sweepmax);
+       
+    Fid(Ndtwarm+step)=abs(braket(mpsi,mps))^2;
+        
+    [VZ,e,n]=expectationvalueTr(mps,OsetZ);
+    
+    Zsurf(:,Ndtwarm+step)=VZ.'/n;
+    
+end
+[Vcurr,Tcur,]=expectationvalueTr(mpsi,OsetCurrent);
+[Vcurr2,Tcur2,n]=expectationvalueTr(mpsi,OsetCurrent2);
+current=real((Tcur-Tcur2)/(N-1)/n);
+Err=imag((Tcur-Tcur2)/(N-1)/n);
+
+%
+% M=N+3*(N-2)+3+3*(N-2)+3;
+% Lset=cell(M,N);
+% J=[0 0; 1 0]';
+%
+% for m=1:M,
+%     for j=1:N,
+%         Lset{m,j}=Id;
+%     end
+% end
+%
+%
+% for j=1:(N-1)
+% Lset{N+3*(j-1)+1,j}=-1i*sqrt(Jx)*kron(id,sx);
+% Lset{N+3*(j-1)+1,j+1}=sqrt(Jx)*kron(id,sx);
+% Lset{N+3*(j-1)+2,j}=-1i*sqrt(Jy)*kron(id,sy);
+% Lset{N+3*(j-1)+2,j+1}=sqrt(Jy)*kron(id,sy);
+% Lset{N+3*(j-1)+3,j}=-1i*sqrt(Jz)*kron(id,sz);
+% Lset{N+3*(j-1)+3,j+1}=sqrt(Jz)*kron(id,sz);
+%
+% Lset{N+3*(N-2)+3+3*(j-1)+1,j}=1i*sqrt(Jx)*kron(sx.',id);
+% Lset{N+3*(N-2)+3+3*(j-1)+1,j+1}=sqrt(Jx)*kron(sx.',id);
+% Lset{N+3*(N-2)+3+3*(j-1)+2,j}=1i*sqrt(Jy)*kron(sy.',id);
+% Lset{N+3*(N-2)+3+3*(j-1)+2,j+1}=sqrt(Jy)*kron(sy.',id);
+% Lset{N+3*(N-2)+3+3*(j-1)+3,j}=1i*sqrt(Jz)*kron(sz.',id);
+% Lset{N+3*(N-2)+3+3*(j-1)+3,j+1}=sqrt(Jz)*kron(sz.',id);
+%
+% % Lset{N+1*(j-1)+1,j}=-1i*sqrt(Jx)*kron(id,sx);
+% % Lset{N+1*(j-1)+1,j+1}=sqrt(Jx)*kron(id,sx);
+% % Lset{N+1*(N-2)+1+1*(j-1)+1,j}=1i*sqrt(Jx)*kron(sx.',id);
+% % Lset{N+1*(N-2)+1+1*(j-1)+1,j+1}=sqrt(Jx)*kron(sx.',id);
+%
+% Lset{j,j}=GAMMA(j)*(kron(conj(J),J)-1/2*(kron(id,J'*J)+kron((J'*J).',id)))...
+%     -1i*hz(j)*kron(id,sz)+1i*hz(j)*kron(sz.',id);
+%
+% %Lset{N+1,j}=Vec0*reshape(id,1,2^2);
+%
+% end
+% j=j+1;
+% J=[0 0; 1 0];
+% Lset{j,j}=GAMMA(j)*(kron(conj(J),J)-1/2*(kron(id,J'*J)+kron((J'*J).',id)))...
+%      -1i*hz(j)*kron(id,sz)+1i*hz(j)*kron(sz.',id);
+%
+% % for j=1:(N-2)
+% % Lset{N+3*(N-2)+3+3*(N-2)+3+(j-1)+1,j}=-1i*sqrt(Jx2)*kron(id,sx);
+% % Lset{N+3*(N-2)+3+3*(N-2)+3+(j-1)+1,j+2}=sqrt(Jx2)*kron(id,sx);
+% % Lset{N+3*(N-2)+3+3*(N-2)+3+N-2+(j-1)+1,j}=1i*sqrt(Jx2)*kron(sx.',id);
+% % Lset{N+3*(N-2)+3+3*(N-2)+3+N-2+(j-1)+1,j+2}=sqrt(Jx2)*kron(sx.',id);
+% % end
+%
+%
+% % Asymptotic State
+%
+% [E0,mps0]=minimizeL(Lset,precision,[],mps,NsweepsMax);
+%
+% [VZ,e,n]=expectationvalueTr(mps0,OsetZ);
+%
+% [Vcurr,Tcur,]=expectationvalueTr(mps,OsetCurrent);
+% [Vcurr2,Tcur2,n]=expectationvalueTr(mps,OsetCurrent2);
+% current=real((Tcur-Tcur2)/(N-1)/n);
+% Err=imag((Tcur-Tcur2)/(N-1)/n);
+
+
+
+Vcurrent=[];
+VErrCurrent=[];
+
+Vcurrent=[Vcurrent current]
+VErrCurrent=[VErrCurrent Err]
+
+
+Vcurrent=[Vcurrent current]
+VErrCurrent=[VErrCurrent ErrCurrent]
+
+figure(2)
+II=[20 26 30 36 ]
+hold on
+plot(II,Vcurrent,'o')
+options = optimset('TolFun',1e-10,'TolFun',1e-10);
+[alpha ,Dist] = fminsearch(@(alpha)ffiitt(Vcurrent,II,alpha),[-rand rand]...
+    ,options);
+
+hold on
+plot(II,alpha(2)*II.^alpha(1))
+
+[alpha ,Dist] = fminsearch(@(alpha)ffiiexp(Vcurrent,II,alpha),[-rand rand]...
+    ,options);
+hold on
+plot(II,alpha(1).^(II*alpha(2)))
+
+hold on
+errorbar([0 0.5 1 1.5 2],Vcurrent,VErrCurrent,'o-')
+
+plot([0 0.5 1 1.5 2 2.5 3 3.5 4],Vcurrent,'o-')
+hold on
+errorbar(real((Vcurr(1:N-1)-Vcurr2(1:N-1))/n),imag((Vcurr(1:N-1)-Vcurr2(1:N-1))/n),'o-')
+Errcurr=std(real((Vcurr(1:N-1)-Vcurr2(1:N-1))/n))/sqrt(N-1);
+Errcurr/current
+
+figure(2)
+pcolor(TT,[1:1:N],(real(Zsurf))), shading interp
+pcolor((real(Zsurf))), shading interp
+
+errorbar([1:1:N],real(Perfil),ErrPerfil,'o-')
+plot([1:1:N],real(Zvec),'o-')
+
+plot(TT,log10(1-Fid))
+
+hold on
+errorbar([0:1/(N-1):1],real(VZ.'/n),imag(VZ.'/n),'o-')
+errorbar([0:1/(N-1):1],real(Zsurf(:,end)),imag(Zsurf(:,end)),'o-')

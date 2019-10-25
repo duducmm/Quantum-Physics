@@ -1,0 +1,12 @@
+function [U,V] = BondMPOsvd(w,dl)
+w=reshape(w,[dl,dl,dl,dl]);
+w=permute(w,[4,2,3,1]);
+w=reshape(w,[dl^2,dl^2]);
+[U,S,V]=svd2(w);
+eta=size(S,1);
+U=U*sqrt(S);
+V=sqrt(S)*V;
+U=reshape(U,[dl,dl,eta]);
+U=permute(U,[4,3,2,1]);
+V=reshape(V,[eta,dl,dl]);
+V=permute(V,[1,4,3,2]);

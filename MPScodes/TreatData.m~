@@ -1,0 +1,52 @@
+clear
+clc
+VN=[20 25 30];
+VWd=[0 0.5 1 1.5 2];
+Gamma=1;
+Jz=1;
+mu=1;
+Wd=0;
+Dmax=50;
+
+Vcurrent=[];
+VErrCurrent=[];
+
+
+for i=1:4
+
+    N=VN(i);
+fname = sprintf('DMdyJz%dW%dG%dmu%dDmax%dN%d.mat',Jz,Wd,Gamma,mu,Dmax,N);
+    load(fname)
+    
+Vcurrent=[Vcurrent current];
+%VErrCurrent=[VErrCurrent ErrCurrent];
+VErrCurrent=[VErrCurrent Err];
+hold on
+%errorbar([0:1/(N-1):1],real(VZ.'/n),imag(VZ.'/n),'o-')
+%errorbar(real((Vcurr(1:N-1)-Vcurr2(1:N-1))/n),imag((Vcurr(1:N-1)-Vcurr2(1:N-1))/n),'o-')
+plot(TT,log10(1-Fid))
+
+gap=log(1-Fid)/TT(end);
+
+
+end
+
+
+
+
+hold on
+errorbar(VN,Vcurrent,VErrCurrent,'o')
+options = optimset('TolFun',1e-10,'TolFun',1e-10);
+
+[alpha ,Dist] = fminsearch(@(alpha)ffiitt(Vcurrent,VN,alpha),[-rand rand]...
+    ,options);
+
+hold on
+plot(VN,alpha(2)*VN.^alpha(1))
+
+
+[alpha ,Dist] = fminsearch(@(alpha)ffiiexp(Vcurrent,VN,alpha),[-rand rand]...
+    ,options);
+hold on
+plot(VN,alpha(1).^(VN*alpha(2)))
+
